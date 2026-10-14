@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nifty Live Option Chain</title>
+    <style>
+        :root {
+            --bg-main: #0b0f19;
+            --bg-surface: #111827;
+            --bg-elevated: #1e293b;
+            --bg-strike: #0f172a;
+            --border-subtle: #1f2937;
+            --border-strong: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #475569;
+            --accent-blue: #38bdf8;
+            --atm-gold: #f59e0b;
+            --up-green: #10b981;
+            --down-red: #f43f5e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+            line-height: 1.5;
+            padding: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .wrapper {
+            max-width: 1160px;
+            margin: 0 auto;
+        }
+
+        /* Top Bar */
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 12px 20px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+
+        .title-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .title-group h1 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            color: var(--text-primary);
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 999px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-strong);
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .status-pill.live {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--up-green);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .status-pill.live .status-dot {
+            background: var(--up-green);
+            box-shadow: 0 0 6px var(--up-green);
+        }
+
+        .status-pill.error {
+            background: rgba(244, 63, 94, 0.12);
+            color: var(--down-red);
+            border-color: rgba(244, 63, 94, 0.3);
+        }
+
+        .status-pill.error .status-dot {
+            background: var(--down-red);
+        }
+
+        /* Center Spot & ATM Summary Bar */
+        .market-ribbon {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .metric-box {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            background: #0d1322;
+            border: 1px solid var(--border-strong);
+            padding: 6px 14px;
+            border-radius: 8px;
+        }
+
+        .metric-box.atm-box {
+            border-color: rgba(245, 158, 11, 0.45);
+            background: rgba(245, 158, 11, 0.08);
+        }
+
+        .metric-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .metric-val {
+            font-size: 15px;
+            font-weight: 700;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            color: var(--text-primary);
+        }
+
+        .metric-box.atm-box .metric-val {
+            color: var(--atm-gold);
+        }
+
+        .btn-atm {
+            background: var(--bg-elevated);
+            color: var(--atm-gold);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            padding: 6px 12px;
+            border-radius: 7px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-atm:hover {
+            background: rgba(245, 158, 11, 0.15);
+        }
+
+        .meta-stats {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .meta-stats span strong {
+            color: var(--text-primary);
+        }
+
+        /* Table Container */
+        .chain-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+        }
+
+        .table-scroll {
+            max-height: calc(100vh - 125px);
+            overflow-y: auto;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            min-width: 700px;
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .group-header th {
+            background: #0d1322;
+            padding: 10px 16px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .group-ce {
+            color: var(--up-green);
+            text-align: left;
+            width: 41%;
+            border-right: 1px solid var(--border-subtle);
+        }
+
+        .group-strike {
+            color: var(--accent-blue);
+            text-align: center;
+            width: 18%;
+            background: #090d16 !important;
+        }
+
+        .group-pe {
+            color: var(--down-red);
+            text-align: right;
+            width: 41%;
+            border-left: 1px solid var(--border-subtle);
+        }
+
+        .col-header th {
+            background: var(--bg-surface);
+            padding: 8px 16px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            border-bottom: 2px solid var(--border-strong);
+        }
+
+        tbody tr {
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        tbody tr:hover {
+            background-color: rgba(56, 189, 248, 0.05);
+        }
+
+        td {
+            padding: 9px 16px;
+            font-size: 13px;
+            vertical-align: middle;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Subtle In-The-Money (ITM) background tint */
+        .itm-ce {
+            background-color: rgba(16, 185, 129, 0.03);
+        }
+
+        .itm-pe {
+            background-color: rgba(244, 63, 94, 0.03);
+        }
+
+        /* Call (Left) Columns */
+        .col-ce-sym {
+            text-align: left;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        .col-ce-ltp {
+            text-align: right;
+            font-weight: 600;
+            font-size: 14px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            border-right: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+        }
+
+        /* Center Strike Column */
+        .col-strike {
+            text-align: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--accent-blue);
+            background: var(--bg-strike);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        /* Put (Right) Columns */
+        .col-pe-ltp {
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            border-left: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+        }
+
+        .col-pe-sym {
+            text-align: right;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        /* ATM Strike Row Highlight */
+        tr.atm-row {
+            background: rgba(245, 158, 11, 0.09) !important;
+            border-top: 1.5px solid rgba(245, 158, 11, 0.55);
+            border-bottom: 1.5px solid rgba(245, 158, 11, 0.55);
+        }
+
+        tr.atm-row td.col-strike {
+            background: rgba(245, 158, 11, 0.18);
+            color: var(--atm-gold);
+            font-weight: 800;
+        }
+
+        .atm-tag {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 800;
+            padding: 1px 5px;
+            margin-left: 6px;
+            border-radius: 4px;
+            background: var(--atm-gold);
+            color: #090d16;
+            vertical-align: middle;
+            letter-spacing: 0.4px;
+        }
+
+        /* Price Direction Indicators */
+        .price-up {
+            color: var(--up-green);
+        }
+
+        .price-down {
+            color: var(--down-red);
+        }
+
+        .price-neutral {
+            color: var(--text-primary);
+        }
+
+        .price-na {
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .dir-arrow {
+            font-size: 10px;
+            margin: 0 3px;
+            display: inline-block;
+            width: 10px;
+            text-align: center;
+        }
+
+        .state-row td {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="wrapper">
+        <header class="topbar">
+            <div class="title-group">
+                <h1>Nifty Option Chain</h1>
+                <div id="statusBadge" class="status-pill">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Connecting...</span>
+                </div>
+            </div>
+
+            <!-- Live Nifty 50 Spot & ATM Strike Indicator -->
+            <div class="market-ribbon">
+                <div class="metric-box">
+                    <span class="metric-label">Nifty 50 Spot</span>
+                    <span id="niftySpotVal" class="metric-val">--</span>
+                </div>
+                <div class="metric-box atm-box">
+                    <span class="metric-label">ATM Strike</span>
+                    <span id="atmStrikeVal" class="metric-val">--</span>
+                </div>
+                <button type="button" id="jumpAtmBtn" class="btn-atm" title="Center table on ATM Strike">
+                    Jump to ATM
+                </button>
+            </div>
+
+            <div class="meta-stats">
+                <span>Strikes: <strong id="strikeCount">0</strong></span>
+                <span>Sync: <strong id="lastSync">--:--:--</strong></span>
+            </div>
+        </header>
+
+        <main class="chain-card">
+            <div class="table-scroll" id="tableScroll">
+                <table>
+                    <thead>
+                        <tr class="group-header">
+                            <th colspan="2" class="group-ce">Calls (CE)</th>
+                            <th class="group-strike">Strike</th>
+                            <th colspan="2" class="group-pe">Puts (PE)</th>
+                        </tr>
+                        <tr class="col-header">
+                            <th style="text-align: left;">Contract</th>
+                            <th style="text-align: right; border-right: 1px solid var(--border-subtle);">LTP (₹)</th>
+                            <th style="text-align: center; background: var(--bg-strike);">Price</th>
+                            <th style="text-align: left; border-left: 1px solid var(--border-subtle);">LTP (₹)</th>
+                            <th style="text-align: right;">Contract</th>
+                        </tr>
+                    </thead>
+                    <tbody id="chainBody">
+                        <tr class="state-row">
+                            <td colspan="5">Loading option chain from local feed server (http://127.0.0.1:5555)...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:5555/";
+        const chainBody = document.getElementById("chainBody");
+        const statusBadge = document.getElementById("statusBadge");
+        const statusText = document.getElementById("statusText");
+        const niftySpotVal = document.getElementById("niftySpotVal");
+        const atmStrikeVal = document.getElementById("atmStrikeVal");
+        const strikeCountEl = document.getElementById("strikeCount");
+        const lastSyncEl = document.getElementById("lastSync");
+        const jumpAtmBtn = document.getElementById("jumpAtmBtn");
+
+        const priceHistory = new Map();
+        let hasAutoScrolledToAtm = false;
+
+        function isValidPrice(val) {
+            return typeof val === "number" && Number.isFinite(val) && val > 0;
+        }
+
+        function formatPriceWithDirection(key, price) {
+            if (!isValidPrice(price)) {
+                return '<span class="price-na">--</span>';
+            }
+
+            const prev = priceHistory.get(key);
+            let dir = prev ? prev.dir : "neutral";
+            if (prev && price > prev.ltp) {
+                dir = "up";
+            } else if (prev && price < prev.ltp) {
+                dir = "down";
+            }
+
+            priceHistory.set(key, { ltp: price, dir });
+
+            let colorClass = "price-neutral";
+            let arrow = "";
+            if (dir === "up") {
+                colorClass = "price-up";
+                arrow = '<span class="dir-arrow">▲</span>';
+            } else if (dir === "down") {
+                colorClass = "price-down";
+                arrow = '<span class="dir-arrow">▼</span>';
+            }
+
+            return `<span class="${colorClass}">${arrow}${price.toFixed(2)}</span>`;
+        }
+
+        function formatLtpCell(leg) {
+            if (!leg || !isValidPrice(leg.ltp)) {
+                return {
+                    html: '<span class="price-na">--</span>',
+                    symbol: leg && leg.symbol ? leg.symbol : "--"
+                };
+            }
+
+            const key = leg.token || leg.symbol;
+            return {
+                html: formatPriceWithDirection(key, leg.ltp),
+                symbol: leg.symbol || "--"
+            };
+        }
+
+        /**
+         * Identifies the ATM strike price:
+         * 1. Primary: Closest available strike to the live Nifty 50 Spot price.
+         * 2. Fallback (if Spot hasn't ticked yet): Strike with minimum |CE_LTP - PE_LTP| where both legs have valid LTPs.
+         */
+        function determineAtmStrike(sortedStrikes, strikesMap, spotPrice) {
+            if (sortedStrikes.length === 0) return null;
+
+            if (isValidPrice(spotPrice)) {
+                let closestStrike = sortedStrikes[0];
+                let minDiff = Math.abs(sortedStrikes[0] - spotPrice);
+
+                for (let i = 1; i < sortedStrikes.length; i++) {
+                    const diff = Math.abs(sortedStrikes[i] - spotPrice);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestStrike = sortedStrikes[i];
+                    }
+                }
+                return closestStrike;
+            }
+
+            // Fallback: Implied parity (minimum absolute difference between Call and Put LTP)
+            let bestStrike = null;
+            let minParityDiff = Infinity;
+            for (let i = 0; i < sortedStrikes.length; i++) {
+                const s = sortedStrikes[i];
+                const pair = strikesMap.get(s);
+                if (pair && pair.ce && pair.pe && isValidPrice(pair.ce.ltp) && isValidPrice(pair.pe.ltp)) {
+                    const diff = Math.abs(pair.ce.ltp - pair.pe.ltp);
+                    if (diff < minParityDiff) {
+                        minParityDiff = diff;
+                        bestStrike = s;
+                    }
+                }
+            }
+            return bestStrike;
+        }
+
+        function scrollToAtmRow() {
+            const atmRow = document.getElementById("atmStrikeRow");
+            if (atmRow) {
+                atmRow.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+        }
+
+        jumpAtmBtn.addEventListener("click", scrollToAtmRow);
+
+        function renderDashboard(payload) {
+            // Support both structured { spot, contracts } and flat dictionary responses
+            const spotObj = payload && payload.contracts ? payload.spot : null;
+            const contractsData = payload && payload.contracts ? payload.contracts : payload;
+
+            const spotPrice = spotObj && isValidPrice(spotObj.ltp) ? spotObj.ltp : null;
+
+            if (spotPrice !== null) {
+                niftySpotVal.innerHTML = formatPriceWithDirection("NIFTY_SPOT", spotPrice);
+            } else {
+                niftySpotVal.innerHTML = '<span class="price-na">--</span>';
+            }
+
+            if (!contractsData || typeof contractsData !== "object") {
+                chainBody.innerHTML = '<tr class="state-row"><td colspan="5">Invalid data format received from feed server.</td></tr>';
+                strikeCountEl.textContent = "0";
+                return;
+            }
+
+            const entries = Object.values(contractsData);
+            if (entries.length === 0) {
+                chainBody.innerHTML = '<tr class="state-row"><td colspan="5">Waiting for instrument contracts from server...</td></tr>';
+                strikeCountEl.textContent = "0";
+                return;
+            }
+
+            const strikesMap = new Map();
+
+            for (let i = 0; i < entries.length; i++) {
+                const item = entries[i];
+                if (!item) continue;
+
+                const strikeNum = Number(item.strike);
+                if (!Number.isFinite(strikeNum) || strikeNum <= 0) continue;
+
+                const strikeKey = Math.round(strikeNum * 100) / 100;
+
+                if (!strikesMap.has(strikeKey)) {
+                    strikesMap.set(strikeKey, { ce: null, pe: null });
+                }
+
+                const group = strikesMap.get(strikeKey);
+                const sym = String(item.symbol || "").toUpperCase();
+                const type = String(item.type || "").toUpperCase();
+
+                if (type === "CE" || sym.endsWith("CE")) {
+                    if (!group.ce || (!isValidPrice(group.ce.ltp) && isValidPrice(item.ltp))) {
+                        group.ce = item;
+                    }
+                } else if (type === "PE" || sym.endsWith("PE")) {
+                    if (!group.pe || (!isValidPrice(group.pe.ltp) && isValidPrice(item.ltp))) {
+                        group.pe = item;
+                    }
+                }
+            }
+
+            const sortedStrikes = Array.from(strikesMap.keys()).sort((a, b) => a - b);
+            strikeCountEl.textContent = String(sortedStrikes.length);
+
+            if (sortedStrikes.length === 0) {
+                chainBody.innerHTML = '<tr class="state-row"><td colspan="5">No valid strike prices found in feed response.</td></tr>';
+                return;
+            }
+
+            const atmStrike = determineAtmStrike(sortedStrikes, strikesMap, spotPrice);
+            if (atmStrike !== null) {
+                atmStrikeVal.textContent = Number.isInteger(atmStrike) ? atmStrike.toString() : atmStrike.toFixed(2);
+            } else {
+                atmStrikeVal.textContent = "--";
+            }
+
+            const rowsHtml = [];
+            for (let i = 0; i < sortedStrikes.length; i++) {
+                const strike = sortedStrikes[i];
+                const pair = strikesMap.get(strike);
+                const isAtm = atmStrike !== null && strike === atmStrike;
+
+                const ceData = formatLtpCell(pair.ce);
+                const peData = formatLtpCell(pair.pe);
+                const strikeLabel = Number.isInteger(strike) ? strike.toString() : strike.toFixed(2);
+
+                const isCallItm = atmStrike !== null && strike < atmStrike;
+                const isPutItm = atmStrike !== null && strike > atmStrike;
+
+                const ceItmClass = isCallItm ? "itm-ce" : "";
+                const peItmClass = isPutItm ? "itm-pe" : "";
+                const rowClass = isAtm ? 'class="atm-row" id="atmStrikeRow"' : "";
+                const atmBadgeHtml = isAtm ? '<span class="atm-tag">ATM</span>' : "";
+
+                rowsHtml.push(`
+                    <tr ${rowClass}>
+                        <td class="col-ce-sym ${ceItmClass}">${ceData.symbol}</td>
+                        <td class="col-ce-ltp ${ceItmClass}">${ceData.html}</td>
+                        <td class="col-strike">${strikeLabel}${atmBadgeHtml}</td>
+                        <td class="col-pe-ltp ${peItmClass}">${peData.html}</td>
+                        <td class="col-pe-sym ${peItmClass}">${peData.symbol}</td>
+                    </tr>
+                `);
+            }
+
+            chainBody.innerHTML = rowsHtml.join("");
+
+            if (!hasAutoScrolledToAtm && atmStrike !== null) {
+                hasAutoScrolledToAtm = true;
+                setTimeout(scrollToAtmRow, 100);
+            }
+        }
+
+        async function pollMarketData() {
+            try {
+                const response = await fetch(API_URL, { cache: "no-store" });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                statusBadge.className = "status-pill live";
+                statusText.textContent = "Live Feed";
+                lastSyncEl.textContent = new Date().toLocaleTimeString();
+
+                renderDashboard(data);
+            } catch (err) {
+                statusBadge.className = "status-pill error";
+                statusText.textContent = "Server Offline";
+                if (chainBody.children.length <= 1) {
+                    chainBody.innerHTML = `
+                        <tr class="state-row">
+                            <td colspan="5">Cannot reach feed server at ${API_URL}. Ensure <strong>python server.py</strong> is running.</td>
+                        </tr>
+                    `;
+                }
+            }
+        }
+
+        setInterval(pollMarketData, 500);
+        pollMarketData();
+    </script>
+</body>
+</html>
